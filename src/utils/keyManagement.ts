@@ -22,7 +22,7 @@ function generateKeyAgreement(mnemonic: string) {
 }
 
 // Generate all necessary key pairs for a DID
-export function generateKeypairs(mnemonic = mnemonicGenerate()) {
+export function generateKeypairs(mnemonic: string) {
   const { account } = generateAccount(mnemonic);
   const authentication = {
     ...account.derive("//did//0"),

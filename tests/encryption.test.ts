@@ -12,7 +12,10 @@ import * as Kilt from "@kiltprotocol/sdk-js";
 import { signMessage } from "../src/didcomm/signing";
 import { generateKeypairs } from "../src/utils/keyManagement";
 import * as Jose from "jose";
-import { createPrivateKeyJwk } from "../src/utils/helpers";
+import {
+  createPrivateKeyJwk,
+  createKeyObjectFromUint8Array,
+} from "../src/utils/helpers";
 
 const seed = process.env.ACCOUNT1_DID_MNEMONIC!;
 
@@ -61,7 +64,8 @@ describe("DIDComm encryption and decryption", () => {
     // Encrypt the message
     const { ciphertext, protect, iv, tag } = await encryptMessage(
       message,
-      didDocumentJwk
+      didDocumentJwk,
+      senderdidDocument!.uri
     );
     console.log("This is the ciphertext: ", ciphertext);
     console.log("This is the protect: ", protect);
@@ -85,14 +89,20 @@ describe("DIDComm encryption and decryption", () => {
       "did:kilt:4qNLDkBxZDaM5U2jKkHro4xkQsyhnXFWMvQJ71WzAfDM51WU" as Kilt.DidUri
     );
 
+    const receiverPublicKey = createKeyObjectFromUint8Array(
+      receiverdidDocument!.keyAgreement![0].publicKey
+    );
+
     const didDocumentJwk = await convertDidDocumentToJwk(receiverdidDocument!);
 
-    const seed = process.env.ACCOUNT2_DID_MNEMONIC! as string;
+    const seed1 =
+      "club luxury collect satoshi awake clinic table tunnel elevator gentle trade easy";
+    const seed2 =
+      "option coconut maximum guitar kiss grass minute six melt youth cross ten";
 
-    const privateKeyJwk: Jose.JWK = await createPrivateKeyJwk(
-      seed,
-      didDocumentJwk
-    );
+    // Create a private key JWK
+    const privateKey = await createPrivateKeyJwk(seed2, didDocumentJwk);
+    console.log("This is the private key JWK: ", privateKey);
 
     // Define a test message
     const plaintext: PlaintextMessage = createMessage(
@@ -102,7 +112,7 @@ describe("DIDComm encryption and decryption", () => {
     );
 
     // Sign the message
-    const { authentication } = generateKeypairs(seed);
+    const { authentication } = generateKeypairs(seed1);
     const signature = await signMessage(
       plaintext,
       async ({ data }) => ({
@@ -118,24 +128,25 @@ describe("DIDComm encryption and decryption", () => {
     };
 
     // Encrypt the message
-    const { ciphertext, protect, iv, tag, recipients } = await encryptMessage(
-      message,
-      didDocumentJwk
-    );
+    const { ciphertext, protect, iv, tag, recipients, jwe } =
+      await encryptMessage(message, didDocumentJwk, receiverPublicKey);
 
     const encryptedMessage: DIDCommEncryptedMessage = {
       signature: signature,
       ciphertext: ciphertext,
       protected: protect,
-      iv: iv,
+      iv: jwe.split(".")[2],
       tag: tag,
       recipients: [recipients[0]],
     };
+    const jweSegments = jwe.split(".");
+    const cekText = jweSegments[3];
 
     // Decrypt the message
     const decryptedMessage = await decryptMessage(
       encryptedMessage,
-      privateKeyJwk
+      privateKey,
+      jwe
     );
     console.log("This is the decrypted message: ", decryptedMessage);
 
